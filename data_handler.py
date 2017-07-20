@@ -24,8 +24,15 @@ def load_data():
 
     # Get participant list
     participants = sorted(typing_df.participant_id.unique())
-    
+
     return typing_df, gesture_df, layout_df, participants
+
+
+def compute_mean_values(df, mode, key):
+    '''
+    Compute mean values for every session, grouped by participant.
+    '''
+    return df[df['mode_id'] == mode].groupby(['participant_id', 'session_id'], as_index=False)[key].mean().groupby('session_id').mean()
 
 
 class DataPlotter(object):
@@ -43,7 +50,7 @@ class DataPlotter(object):
         self.error_checkbox = None
         self.modes = sorted(df.mode_id.unique())
 
-    def plot_data(self, mode, show_error=True, **kwargs):
+    def plot_data(self, mode, show_error=False, **kwargs):
         '''
         Plots the data.
         '''
@@ -60,9 +67,9 @@ class DataPlotter(object):
             else:
                 epsilon = 0
                 yerrs = [0 for _ in yerrs]
-            x = np.arange(1 + epsilon, len(all_means[-1]) + 1 + epsilon, 1)
+            x = np.arange(1 + epsilon, len(all_means[-1]) + 1 + epsilon, 1)[:len(all_means[-1])]
             plots[participant] = plt.errorbar(x, all_means[-1], yerrs, label=participant)
-        mean_values = mode_values.groupby(['participant_id', 'session_id'], as_index=False)[self.key].mean().groupby('session_id').mean()
+        mean_values = compute_mean_values(self.df, mode, self.key)
         x = range(1, len(mean_values) + 1)
         plots['Overall'] = plt.plot(x, mean_values, '-*', label='Overall')
         plt.xticks(range(1, 1 + max([len(values) for values in all_means])))
@@ -87,13 +94,13 @@ class DataPlotter(object):
         self.all_button = widgets.Button(description="Toggle Select All")
         display(self.all_button)
         self.all_button.on_click(self.toggle_all)
-        
+
         # Create error checkbox
-        self.error_checkbox = interactive(self.update_show_error, show_error=True)
+        self.error_checkbox = interactive(self.update_show_error, show_error=False)
 
         # Create checkboxes
         self.checkboxes = [interactive(self.update_plot, **{p: True, 'participant': fixed(p)}) for p in self.participants + ['Overall']]
-        
+
         # Display checkboxes
         self.containers = []
         for i in range(0, len(self.checkboxes), 4):
@@ -110,7 +117,7 @@ class DataPlotter(object):
         '''
         p[0].set_visible(visible)
         self.set_error_visible(p, self.error_checkbox.children[0].value)
-    
+
     def set_error_visible(self, p, visible):
         visible = visible and p[0].get_visible()
         if len(p) > 1:
@@ -129,7 +136,7 @@ class DataPlotter(object):
         for checkbox in self.checkboxes:
             for plot in self.plots:
                 self.set_visible(plot[participant], visible)
-    
+
     def update_show_error(self, show_error):
         '''
         Show/hide error bars from plot.
